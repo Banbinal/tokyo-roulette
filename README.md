@@ -1,4 +1,4 @@
-# Draw a random metro station in Tokyo
+# Draw a random station in Tokyo
 
 Picks a random line, then a random stop on that line. Two modes:
 
