@@ -1,13 +1,13 @@
-// Chi-square tests of the draw used in index.html (line uniform, then stop uniform within the line).
+// Chi-square tests of the draw used in index.html, both modes (line uniform, then stop uniform within the line).
 // Usage: node test/distribution.mjs [runs=100] [draws=100000]
 import { readFileSync } from "node:fs";
 import { webcrypto } from "node:crypto";
 if (!globalThis.crypto) Object.defineProperty(globalThis, "crypto", { value: webcrypto });
 
 const js = readFileSync(new URL("../index.html", import.meta.url), "utf8").split("<script>")[1];
-const LINES = new Function(js.slice(js.indexOf("const LINES"), js.indexOf("const K=")) + "return LINES;")();
-const randInt = new Function(js.slice(js.indexOf("const buf"), js.indexOf("const pick")) + "return randInt;")();
-const K = LINES.length;
+const data = js.slice(js.indexOf("const METRO_RAW"), js.indexOf("const MODES="));
+const rnd = js.slice(js.indexOf("const buf"), js.indexOf("let mode="));
+const { METRO, RAIL, randInt } = new Function(data + rnd + "return { METRO, RAIL, randInt };")();
 
 function lgamma(x) {
   const c = [0.99999999999980993, 676.5203681218851, -1259.1392167224028, 771.32342877765313, -176.61502916214059,
@@ -29,18 +29,20 @@ function pValue(chi2, df) { // upper tail of chi-square = Q(df/2, chi2/2)
 }
 
 const runs = +process.argv[2] || 100, N = +process.argv[3] || 100000;
-const p = { lines: [], stops: [] };
-for (let r = 0; r < runs; r++) {
-  const L = new Array(K).fill(0), S = LINES.map(l => new Array(l.stops.length).fill(0));
-  for (let i = 0; i < N; i++) { const li = randInt(K), si = randInt(LINES[li].stops.length); L[li]++; S[li][si]++; }
-  let x = 0; for (const v of L) x += (v - N / K) ** 2 / (N / K);
-  let y = 0, df = -1;
-  LINES.forEach((l, li) => S[li].forEach(v => { const e = N / K / l.stops.length; y += (v - e) ** 2 / e; df++; }));
-  p.lines.push(pValue(x, K - 1)); p.stops.push(pValue(y, df));
-}
-const stops = LINES.reduce((a, l) => a + l.stops.length, 0);
-console.log(`${K} lines, ${stops} stops — ${runs} runs × ${N} draws`);
-for (const [k, ps] of Object.entries(p)) {
-  const rej = ps.filter(v => v < 0.05).length / runs, mean = ps.reduce((a, b) => a + b, 0) / runs;
-  console.log(`${k.padEnd(5)}  mean p = ${mean.toFixed(3)} (expected ≈ 0.5)   p < 0.05 in ${(rej * 100).toFixed(0)} % of runs (expected ≈ 5 %)`);
+for (const [mode, LINES] of [["Metro", METRO], ["All rail", RAIL]]) {
+  const K = LINES.length, stops = LINES.reduce((a, l) => a + l.stops.length, 0);
+  const p = { lines: [], stops: [] };
+  for (let r = 0; r < runs; r++) {
+    const L = new Array(K).fill(0), S = LINES.map(l => new Array(l.stops.length).fill(0));
+    for (let i = 0; i < N; i++) { const li = randInt(K), si = randInt(LINES[li].stops.length); L[li]++; S[li][si]++; }
+    let x = 0; for (const v of L) x += (v - N / K) ** 2 / (N / K);
+    let y = 0, df = -1;
+    LINES.forEach((l, li) => S[li].forEach(v => { const e = N / K / l.stops.length; y += (v - e) ** 2 / e; df++; }));
+    p.lines.push(pValue(x, K - 1)); p.stops.push(pValue(y, df));
+  }
+  console.log(`${mode}: ${K} lines, ${stops} stops — ${runs} runs × ${N} draws`);
+  for (const [k, ps] of Object.entries(p)) {
+    const rej = ps.filter(v => v < 0.05).length / runs, mean = ps.reduce((a, b) => a + b, 0) / runs;
+    console.log(`  ${k.padEnd(5)}  mean p = ${mean.toFixed(3)} (expected ≈ 0.5)   p < 0.05 in ${(rej * 100).toFixed(0)} % of runs (expected ≈ 5 %)`);
+  }
 }

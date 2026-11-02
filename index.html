@@ -34,7 +34,16 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;background:rad
 .brand span{font-family:var(--f-kanji);font-weight:800;color:var(--dim);font-size:.95rem}
 
 /* Roue */
-.stage{position:relative;flex:none;width:min(88vw,460px,calc(100svh - 330px));min-width:220px;max-width:100%;aspect-ratio:1}
+.seg{display:inline-flex;background:var(--panel);border:1px solid var(--rule);border-radius:999px;padding:3px;flex:none}
+.seg button{font:inherit;font-size:.8rem;font-weight:500;border:0;background:transparent;color:var(--dim);padding:5px 12px;border-radius:999px;cursor:pointer;transition:background .2s,color .2s}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.seg.busy{opacity:.5;pointer-events:none}
+.seg button:focus-visible{outline:3px solid var(--dim);outline-offset:2px}
+.rd.dot{width:2.4%;border-width:0;background:var(--c);font-size:0;color:#fff}
+.rd.dot.on{width:12.5%;font-size:clamp(12px,3.6vw,17px);transform:translate(-50%,-50%) scale(1.15);z-index:2}
+.stage.locked .rd.dot:not(.on){opacity:.22}
+.code.solo .l{font-size:1rem}
+.stage{position:relative;flex:none;width:min(88vw,460px,calc(100svh - 340px));min-width:220px;max-width:100%;aspect-ratio:1}
 .track{position:absolute;inset:0;width:100%;height:100%}
 .track circle{fill:none}
 .spin .track .dash{animation:rot 6s linear infinite}
@@ -93,7 +102,8 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;background:rad
 <body>
 <main class="app">
   <div class="bar">
-    <div class="brand"><b>Draw a random metro station in Tokyo</b><span>地下鉄</span></div>
+    <div class="brand"><b>Draw a random metro station in Tokyo</b><span id="bk">地下鉄</span></div>
+    <div class="seg" id="seg" role="group" aria-label="Network"><button data-m="metro" aria-pressed="true">Metro</button><button data-m="rail" aria-pressed="false">All rail</button></div>
   </div>
 
   <div class="stage" id="stage">
@@ -122,7 +132,7 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;background:rad
 </main>
 
 <script>
-const LINES=[
+const METRO_RAW=[
  ["G","Ginza","銀座線","#FF9500","Shibuya:渋谷|Omotesandō:表参道|Gaiemmae:外苑前|Aoyama-itchōme:青山一丁目|Akasaka-mitsuke:赤坂見附|Tameike-sannō:溜池山王|Toranomon:虎ノ門|Shimbashi:新橋|Ginza:銀座|Kyōbashi:京橋|Nihombashi:日本橋|Mitsukoshimae:三越前|Kanda:神田|Suehirochō:末広町|Ueno-hirokōji:上野広小路|Ueno:上野|Inarichō:稲荷町|Tawaramachi:田原町|Asakusa:浅草"],
  ["M","Marunouchi","丸ノ内線","#F62E36","Ogikubo:荻窪|Minami-asagaya:南阿佐ケ谷|Shin-kōenji:新高円寺|Higashi-kōenji:東高円寺|Shin-nakano:新中野|Nakano-sakaue:中野坂上|Nishi-shinjuku:西新宿|Shinjuku:新宿|Shinjuku-sanchōme:新宿三丁目|Shinjuku-gyoemmae:新宿御苑前|Yotsuya-sanchōme:四谷三丁目|Yotsuya:四ツ谷|Akasaka-mitsuke:赤坂見附|Kokkai-gijidōmae:国会議事堂前|Kasumigaseki:霞ケ関|Ginza:銀座|Tōkyō:東京|Ōtemachi:大手町|Awajichō:淡路町|Ochanomizu:御茶ノ水|Hongō-sanchōme:本郷三丁目|Kōrakuen:後楽園|Myōgadani:茗荷谷|Shin-ōtsuka:新大塚|Ikebukuro:池袋","Mb03 Nakano-shimbashi:中野新橋|Mb04 Nakano-fujimichō:中野富士見町|Mb05 Hōnanchō:方南町"],
  ["H","Hibiya","日比谷線","#B5B5AC","Naka-meguro:中目黒|Ebisu:恵比寿|Hiroo:広尾|Roppongi:六本木|Kamiyachō:神谷町|Toranomon Hills:虎ノ門ヒルズ|Kasumigaseki:霞ケ関|Hibiya:日比谷|Ginza:銀座|Higashi-ginza:東銀座|Tsukiji:築地|Hatchōbori:八丁堀|Kayabachō:茅場町|Ningyōchō:人形町|Kodemmachō:小伝馬町|Akihabara:秋葉原|Naka-okachimachi:仲御徒町|Ueno:上野|Iriya:入谷|Minowa:三ノ輪|Minami-senju:南千住|Kita-senju:北千住"],
@@ -136,72 +146,160 @@ const LINES=[
  ["I","Mita","三田線","#0079C2","Meguro:目黒|Shirokanedai:白金台|Shirokane-takanawa:白金高輪|Mita:三田|Shibakōen:芝公園|Onarimon:御成門|Uchisaiwaichō:内幸町|Hibiya:日比谷|Ōtemachi:大手町|Jimbōchō:神保町|Suidōbashi:水道橋|Kasuga:春日|Hakusan:白山|Sengoku:千石|Sugamo:巣鴨|Nishi-sugamo:西巣鴨|Shin-itabashi:新板橋|Itabashi-kuyakushomae:板橋区役所前|Itabashi-honchō:板橋本町|Motohasunuma:本蓮沼|Shimura-sakaue:志村坂上|Shimura-sanchōme:志村三丁目|Hasune:蓮根|Nishidai:西台|Takashimadaira:高島平|Shin-takashimadaira:新高島平|Nishi-takashimadaira:西高島平"],
  ["S","Shinjuku","新宿線","#6CBB5A","Shinjuku:新宿|Shinjuku-sanchōme:新宿三丁目|Akebonobashi:曙橋|Ichigaya:市ケ谷|Kudanshita:九段下|Jimbōchō:神保町|Ogawamachi:小川町|Iwamotochō:岩本町|Bakuro-yokoyama:馬喰横山|Hamachō:浜町|Morishita:森下|Kikukawa:菊川|Sumiyoshi:住吉|Nishi-ōjima:西大島|Ōjima:大島|Higashi-ōjima:東大島|Funabori:船堀|Ichinoe:一之江|Mizue:瑞江|Shinozaki:篠崎|Motoyawata:本八幡"],
  ["E","Ōedo","大江戸線","#B6007A","Shinjuku-nishiguchi:新宿西口|Higashi-shinjuku:東新宿|Wakamatsu-kawada:若松河田|Ushigome-yanagichō:牛込柳町|Ushigome-kagurazaka:牛込神楽坂|Iidabashi:飯田橋|Kasuga:春日|Hongō-sanchōme:本郷三丁目|Ueno-okachimachi:上野御徒町|Shin-okachimachi:新御徒町|Kuramae:蔵前|Ryōgoku:両国|Morishita:森下|Kiyosumi-shirakawa:清澄白河|Monzen-nakachō:門前仲町|Tsukishima:月島|Kachidoki:勝どき|Tsukijishijō:築地市場|Shiodome:汐留|Daimon:大門|Akabanebashi:赤羽橋|Azabu-jūban:麻布十番|Roppongi:六本木|Aoyama-itchōme:青山一丁目|Kokuritsu-kyōgijō:国立競技場|Yoyogi:代々木|Shinjuku:新宿|Tochōmae:都庁前|Nishi-shinjuku-gochōme:西新宿五丁目|Nakano-sakaue:中野坂上|Higashi-nakano:東中野|Nakai:中井|Ochiai-minami-nagasaki:落合南長崎|Shin-egota:新江古田|Nerima:練馬|Toshimaen:豊島園|Nerima-kasugachō:練馬春日町|Hikarigaoka:光が丘"]
-].map(([l,n,j,c,s,br])=>{
+];
+const RAIL_EXTRA=[["JY","Yamanote","山手線","#80C342","JR East","Osaki:大崎|Gotanda:五反田|Meguro:目黒|Ebisu:恵比寿|Shibuya:渋谷|Harajuku:原宿|Yoyogi:代々木|Shinjuku:新宿|Shin-Okubo:新大久保|Takadanobaba:高田馬場|Mejiro:目白|Ikebukuro:池袋|Otsuka:大塚|Sugamo:巣鴨|Komagome:駒込|Tabata:田端|Nishi-Nippori:西日暮里|Nippori:日暮里|Uguisudani:鶯谷|Ueno:上野|Okachimachi:御徒町|Akihabara:秋葉原|Kanda:神田|Tokyo:東京|Yurakucho:有楽町|Shimbashi:新橋|Hamamatsucho:浜松町|Tamachi:田町|Takanawa Gateway:高輪ゲートウェイ|Shinagawa:品川"],
+ ["JC","Chuo Rapid","中央線快速","#F15A22","JR East","Tokyo:東京|Kanda:神田|Ochanomizu:御茶ノ水|Yotsuya:四ツ谷|Shinjuku:新宿|Nakano:中野|Koenji:高円寺|Asagaya:阿佐ケ谷|Ogikubo:荻窪|Nishi-Ogikubo:西荻窪|Kichijoji:吉祥寺|Mitaka:三鷹|Musashi-Sakai:武蔵境|Higashi-Koganei:東小金井|Musashi-Koganei:武蔵小金井|Kokubunji:国分寺|Nishi-Kokubunji:西国分寺|Kunitachi:国立|Tachikawa:立川|Hino:日野|Toyoda:豊田|Hachioji:八王子|Nishi-Hachioji:西八王子|Takao:高尾"],
+ ["JC","Ome","青梅線","#F15A22","JR East","Tachikawa:立川|Nishi-Tachikawa:西立川|Higashi-Nakagami:東中神|Nakagami:中神|Akishima:昭島|Haijima:拝島|Ushihama:牛浜|Fussa:福生|Hamura:羽村|Ozaku:小作|Kabe:河辺|Higashi-Ome:東青梅|Ome:青梅|Miyanohira:宮ノ平|Hinatawada:日向和田|Ishigamimae:石神前|Futamatao:二俣尾|Ikusabata:軍畑|Sawai:沢井|Mitake:御嶽|Kawai:川井|Kori:古里|Hatonosu:鳩ノ巣|Shiromaru:白丸|Oku-Tama:奥多摩"],
+ ["五","Itsukaichi","五日市線","#F15A22","JR East","Haijima:拝島|Kumagawa:熊川|Higashi-Akiru:東秋留|Akigawa:秋川|Musashi-Hikida:武蔵引田|Musashi-Masuko:武蔵増戸|Musashi-Itsukaichi:武蔵五日市"],
+ ["JB","Chuo Sobu Local","中央・総武各駅停車","#FFD400","JR East","Koiwa:小岩|Shin-Koiwa:新小岩|Hirai:平井|Kameido:亀戸|Kinshicho:錦糸町|Ryogoku:両国|Asakusabashi:浅草橋|Akihabara:秋葉原|Ochanomizu:御茶ノ水|Suidobashi:水道橋|Iidabashi:飯田橋|Ichigaya:市ケ谷|Yotsuya:四ツ谷|Shinanomachi:信濃町|Sendagaya:千駄ケ谷|Yoyogi:代々木|Shinjuku:新宿|Okubo:大久保|Higashi-Nakano:東中野|Nakano:中野|Koenji:高円寺|Asagaya:阿佐ケ谷|Ogikubo:荻窪|Nishi-Ogikubo:西荻窪|Kichijoji:吉祥寺|Mitaka:三鷹"],
+ ["JT","Tokaido","東海道線","#F68B1E","JR East","Tokyo:東京|Shimbashi:新橋|Shinagawa:品川"],
+ ["JU","Utsunomiya","宇都宮線","#F68B1E","JR East","Tokyo:東京|Ueno:上野|Oku:尾久|Akabane:赤羽"],
+ ["JU","Takasaki","高崎線","#F68B1E","JR East","Tokyo:東京|Ueno:上野|Oku:尾久|Akabane:赤羽"],
+ ["JK","Keihin-Tohoku-Negishi","京浜東北線・根岸線","#00B2E5","JR East","Akabane:赤羽|Higashi-Jujo:東十条|Oji:王子|Kami-Nakazato:上中里|Tabata:田端|Nishi-Nippori:西日暮里|Nippori:日暮里|Uguisudani:鶯谷|Ueno:上野|Okachimachi:御徒町|Akihabara:秋葉原|Kanda:神田|Tokyo:東京|Yurakucho:有楽町|Shimbashi:新橋|Hamamatsucho:浜松町|Tamachi:田町|Takanawa Gateway:高輪ゲートウェイ|Shinagawa:品川|Oimachi:大井町|Omori:大森|Kamata:蒲田"],
+ ["JJ","Joban Rapid","常磐線快速","#00B261","JR East","Ueno:上野|Nippori:日暮里|Mikawashima:三河島|Minami-Senju:南千住|Kita-Senju:北千住"],
+ ["JL","Joban Local","常磐線各駅停車","#A8A39D","JR East","Ayase:綾瀬|Kameari:亀有|Kanamachi:金町"],
+ ["JO","Sobu Rapid","総武快速線","#007AC1","JR East","Tokyo:東京|Shin-Nihombashi:新日本橋|Bakurocho:馬喰町|Kinshicho:錦糸町|Shin-Koiwa:新小岩"],
+ ["JO","Yokosuka","横須賀線","#007AC1","JR East","Tokyo:東京|Shimbashi:新橋|Shinagawa:品川|Nishi-Oi:西大井"],
+ ["JE","Keiyo","京葉線","#C9252F","JR East","Tokyo:東京|Hatchobori:八丁堀|Etchujima:越中島|Shiomi:潮見|Shin-Kiba:新木場|Kasai-rinkai-kōen:葛西臨海公園"],
+ ["JA","Saikyo-Kawagoe","埼京線・川越線","#00B48D","JR East","Osaki:大崎|Ebisu:恵比寿|Shibuya:渋谷|Shinjuku:新宿|Ikebukuro:池袋|Itabashi:板橋|Jujo:十条|Akabane:赤羽|Kita-Akabane:北赤羽|Ukima-funado:浮間舟渡"],
+ ["JS","Shonan-Shinjuku","湘南新宿ライン","#E31F26","JR East","Nishi-Oi:西大井|Osaki:大崎|Ebisu:恵比寿|Shibuya:渋谷|Shinjuku:新宿|Ikebukuro:池袋|Akabane:赤羽"],
+ ["JN","Nambu","南武線","#FFD400","JR East","Yanokuchi:矢野口|Inagi-naganuma:稲城長沼|Minami-Tama:南多摩|Fuchū-hommachi:府中本町|Bubaigawara:分倍河原|Nishifu:西府|Yaho:谷保|Yagawa:矢川|Nishi-Kunitachi:西国立|Tachikawa:立川"],
+ ["JM","Musashino","武蔵野線","#F15A22","JR East","Fuchū-hommachi:府中本町|Kita-Fuchu:北府中|Nishi-Kokubunji:西国分寺|Shin-Kodaira:新小平|Shin-Akitsu:新秋津"],
+ ["JH","Yokohama","横浜線","#80C342","JR East","Naruse:成瀬|Machida:町田|Aihara:相原|Hachiōji-minamino:八王子みなみ野|Katakura:片倉|Hachioji:八王子"],
+ ["八","Hachiko","八高線","#A8A39D","JR East","Hachioji:八王子|Kita-Hachioji:北八王子|Komiya:小宮|Haijima:拝島|Higashi-Fussa:東福生|Hakonegasaki:箱根ケ崎"],
+ ["R","Rinkai","りんかい線","#00418E","TWR","Shin-kiba:新木場|Shinonome:東雲|Kokusai-tenjijo:国際展示場|Tokyo Teleport:東京テレポート|Tennozu Isle:天王洲アイル|Shinagawa Seaside:品川シーサイド|Oimachi:大井町|Osaki:大崎"],
+ ["NT","Nippori-Toneri Liner","日暮里・舎人ライナー","#227324","Toei","Nippori:日暮里|Nishi-nippori:西日暮里|Akado-shogakkomae:赤土小学校前|Kumanomae:熊野前|Adachi-odai:足立小台|Ogi-ohashi:扇大橋|Koya:高野|Kohoku:江北|Nishiaraidaishi-nishi:西新井大師西|Yazaike:谷在家|Toneri-koen:舎人公園|Toneri:舎人|Minumadai-shinsuikoen:見沼代親水公園"],
+ ["SA","Tokyo Sakura Tram (Arakawa)","東京さくらトラム","#EE86A7","Toei","Minowabashi:三ノ輪橋|Arakawa-itchumae:荒川一中前|Arakawa-kuyakushomae:荒川区役所前|Arakawa-nichome:荒川二丁目|Arakawa-nanachome:荒川七丁目|Machiya-ekimae:町屋駅前|Machiya-nichome:町屋二丁目|Higashi-ogu-sanchome:東尾久三丁目|Kumanomae:熊野前|Miyanomae:宮ノ前|Odai:小台|Arakawa-yuenchimae:荒川遊園地前|Arakawa-shakomae:荒川車庫前|Kajiwara:梶原|Sakaecho:栄町|Oji-ekimae:王子駅前|Asukayama:飛鳥山|Takinogawa-itchome:滝野川一丁目|Nishigahara-yonchome:西ヶ原四丁目|Shin-koshinzuka:新庚申塚|Koshinzuka:庚申塚|Sugamo-shinden:巣鴨新田|Otsuka-ekimae:大塚駅前|Mukohara:向原|Higashi-ikebukuro-yonchome:東池袋四丁目|Toden-zoshigaya:都電雑司ヶ谷|Kishibojimmae:鬼子母神前|Gakushūin-shita:学習院下|Omokagebashi:面影橋|Waseda:早稲田"],
+ ["KO","Keiō New","京王新線","#DD0077","Keio","Shinjuku:新宿|Hatsudai:初台|Hatagaya:幡ヶ谷|Sasazuka:笹塚"],
+ ["KO","Keiō","京王線","#DD0077","Keio","Shinjuku:新宿|Sasazuka:笹塚|Daitabashi:代田橋|Meidaimae:明大前|Shimo-takaido:下高井戸|Sakurajōsui:桜上水|Kami-kitazawa:上北沢|Hachiman-yama:八幡山|Roka-kōen:芦花公園|Chitose-karasuyama:千歳烏山|Sengawa:仙川|Tsutsujigaoka:つつじヶ丘|Shibasaki:柴崎|Kokuryō:国領|Fuda:布田|Chōfu:調布|Nishi-chōfu:西調布|Tobitakyū:飛田給|Musashinodai:武蔵野台|Tama-reien:多磨霊園|Higashi-fuchū:東府中|Fuchū:府中|Bubaigawara:分倍河原|Nakagawara:中河原|Seiseki-sakuragaoka:聖蹟桜ヶ丘|Mogusaen:百草園|Takahatafudō:高幡不動|Minamidaira:南平|Hirayamajōshi-kōen:平山城址公園|Naganuma:長沼|Kitano:北野|Keiō-hachiōji:京王八王子"],
+ ["KO","Sagamihara","相模原線","#DD0077","Keio","Chōfu:調布|Keiō-tamagawa:京王多摩川|Keiō-yomiuri-land:京王よみうりランド|Inagi:稲城|Keiō-nagayama:京王永山|Keiō-tama-center:京王多摩センター|Keiō-horinouchi:京王堀之内|Minami-ōsawa:南大沢|Tamasakai:多摩境"],
+ ["KO","Keibajō","競馬場線","#DD0077","Keio","Higashi-fuchū:東府中|Fuchūkeiba-seimommae:府中競馬正門前"],
+ ["KO","Dōbutsuen","動物園線","#DD0077","Keio","Takahatafudō:高幡不動|Tama-dōbutsukōen:多摩動物公園"],
+ ["KO","Takao","高尾線","#DD0077","Keio","Kitano:北野|Keiō-katakura:京王片倉|Yamada:山田|Mejirodai:めじろ台|Hazama:狭間|Takao:高尾|Takaosanguchi:高尾山口"],
+ ["IN","Inokashira","井の頭線","#000088","Keio","Shibuya:渋谷|Shinsen:神泉|Komaba-tōdaimae:駒場東大前|Ikenoue:池ノ上|Shimo-kitazawa:下北沢|Shindaita:新代田|Higashi-matsubara:東松原|Meidaimae:明大前|Eifukuchō:永福町|Nishi-eifuku:西永福|Hamadayama:浜田山|Takaido:高井戸|Fujimigaoka:富士見ヶ丘|Kugayama:久我山|Mitakadai:三鷹台|Inokashira-kōen:井の頭公園|Kichijōji:吉祥寺"],
+ ["KK","Keikyū Main","京急本線","#33C2E4","Keikyu","Sengakuji:泉岳寺|Shinagawa:品川|Kita-shinagawa:北品川|Shimbamba:新馬場|Aomono-yokochō:青物横丁|Samezu:鮫洲|Tachiaigawa:立会川|Ōmorikaigan:大森海岸|Heiwajima:平和島|Ōmorimachi:大森町|Umeyashiki:梅屋敷|Keikyū Kamata:京急蒲田|Zōshiki:雑色|Rokugōdote:六郷土手"],
+ ["KK","Airport","空港線","#33C2E4","Keikyu","Keikyū Kamata:京急蒲田|Kojiya:糀谷|Ōtorii:大鳥居|Anamori-inari:穴守稲荷|Tenkūbashi:天空橋|Haneda Airport Terminal 3:羽田空港第３ターミナル|Haneda Airport Terminal 1 and 2:羽田空港第１・第２ターミナル"],
+ ["KS","Keisei Main","京成本線","#005AAA","Keisei","Keisei-Ueno:京成上野|Nippori:日暮里|Shim-Mikawashima:新三河島|Machiya:町屋|Senjuōhashi:千住大橋|Keisei-Sekiya:京成関屋|Horikiri-shōbuen:堀切菖蒲園|Ohanajaya:お花茶屋|Aoto:青砥|Keisei-Takasago:京成高砂|Keisei-Koiwa:京成小岩|Edogawa:江戸川"],
+ ["KS","Oshiage","押上線","#005AAA","Keisei","Oshiage:押上|Keisei-Hikifune:京成曳舟|Yahiro:八広|Yotsugi:四ツ木|Keisei-Tateishi:京成立石|Aoto:青砥"],
+ ["KS","Kanamachi","金町線","#005AAA","Keisei","Keisei-Takasago:京成高砂|Shibamata:柴又|Keisei-Kanamachi:京成金町"],
+ ["HS","Hokuso","北総線","#00BDF2","Hokuso","Keisei-Takasago:京成高砂|Shin-Shibamata:新柴又"],
+ ["TS","Tobu Skytree","東武スカイツリーライン","#0F6CC3","Tobu","Asakusa:浅草|TOKYO SKYTREE:とうきょうスカイツリー|Hikifune:曳舟|Higashi-mukojima:東向島|Kanegafuchi:鐘ヶ淵|Horikiri:堀切|Ushida:牛田|Kita-senju:北千住|Kosuge:小菅|Gotanno:五反野|Umejima:梅島|Nishiarai:西新井|Takenotsuka:竹ノ塚|Oshiage:押上"],
+ ["TS","Kameido","亀戸線","#0F6CC3","Tobu","Hikifune:曳舟|Omurai:小村井|Higashi-azuma:東あずま|Kameido-suijin:亀戸水神|Kameido:亀戸"],
+ ["TS","Daishi","大師線","#0F6CC3","Tobu","Nishiarai:西新井|Daishimae:大師前"],
+ ["TJ","Tojo","東上線","#000099","Tobu","Ikebukuro:池袋|Kita-ikebukuro:北池袋|Shimo-itabashi:下板橋|Oyama:大山|Naka-itabashi:中板橋|Tokiwadai:ときわ台|Kami-itabashi:上板橋|Tobu-nerima:東武練馬|Shimo-akatsuka:下赤塚|Narimasu:成増"],
+ ["SI","Ikebukuro","池袋線","#FF6600","Seibu","Ikebukuro:池袋|Shiinamachi:椎名町|Higashi-Nagasaki:東長崎|Ekoda:江古田|Sakuradai:桜台|Nerima:練馬|Nakamurabashi:中村橋|Fujimidai:富士見台|Nerima-Takanodai:練馬高野台|Shakujii-Koen:石神井公園|Oizumi-Gakuen:大泉学園|Hoya:保谷|Hibarigaoka:ひばりヶ丘|Higashi-Kurume:東久留米|Kiyose:清瀬|Akitsu:秋津"],
+ ["SI","Toshima","豊島線","#FF6600","Seibu","Nerima:練馬|Toshimaen:豊島園"],
+ ["SI","Seibu-Yurakucho","西武有楽町線","#FF6600","Seibu","Kotake-Mukaihara:小竹向原|Shin-Sakuradai:新桜台|Nerima:練馬"],
+ ["SS","Shinjuku","新宿線","#0099CC","Seibu","Seibu-Shinjuku:西武新宿|Takadanobaba:高田馬場|Shimo-Ochiai:下落合|Nakai:中井|Araiyakushi-Mae:新井薬師前|Numabukuro:沼袋|Nogata:野方|Toritsu-Kasei:都立家政|Saginomiya:鷺ノ宮|Shimo-Igusa:下井草|Iogi:井荻|Kami-Igusa:上井草|Kami-Shakujii:上石神井|Musashi-Seki:武蔵関|Higashi-Fushimi:東伏見|Seibu-Yagisawa:西武柳沢|Tanashi:田無|Hana-Koganei:花小金井|Kodaira:小平|Kumegawa:久米川|Higashi-Murayama:東村山"],
+ ["SS","Haijima","拝島線","#0099CC","Seibu","Kodaira:小平|Hagiyama:萩山|Ogawa:小川|Higashi-Yamatoshi:東大和市|Tamagawa-Josui:玉川上水|Musashi-Sunagawa:武蔵砂川|Seibu-Tachikawa:西武立川|Haijima:拝島"],
+ ["ST","Tamako","多摩湖線","#FFCC33","Seibu","Kokubunji:国分寺|Hitotsubashi-Gakuen:一橋学園|Ome-Kaido:青梅街道|Hagiyama:萩山|Yasaka:八坂|Musashi-Yamato:武蔵大和|Tamako:多摩湖"],
+ ["SK","Kokubunji","国分寺線","#33CC66","Seibu","Kokubunji:国分寺|Koigakubo:恋ヶ窪|Takanodai:鷹の台|Ogawa:小川|Higashi-Murayama:東村山"],
+ ["SS","Seibuen","西武園線","#33CC66","Seibu","Higashi-Murayama:東村山|Seibuen:西武園"],
+ ["SW","Tamagawa","多摩川線","#FF6600","Seibu","Musashi-Sakai:武蔵境|Shin-Koganei:新小金井|Tama:多磨|Shiraitodai:白糸台|Kyoteijo-Mae:競艇場前|Koremasa:是政"],
+ ["OH","Odawara","小田原線","#2288CC","Odakyu","Shinjuku:新宿|Minami-Shinjuku:南新宿|Sangubashi:参宮橋|Yoyogi-Hachiman:代々木八幡|Yoyogi-Uehara:代々木上原|Higashi-Kitazawa:東北沢|Shimo-Kitazawa:下北沢|Setagaya-Daita:世田谷代田|Umegaoka:梅ヶ丘|Gotokuji:豪徳寺|Kyodo:経堂|Chitose-Funabashi:千歳船橋|Soshigaya-Okura:祖師ヶ谷大蔵|Seijogakuen-Mae:成城学園前|Kitami:喜多見|Komae:狛江|Izumi-Tamagawa:和泉多摩川|Tsurukawa:鶴川|Tamagawagakuen-Mae:玉川学園前|Machida:町田"],
+ ["OT","Tama","多摩線","#2288CC","Odakyu","Odakyu-Nagayama:小田急永山|Odakyu Tama Center:小田急多摩センター|Karakida:唐木田"],
+ ["DT","Den-en-toshi","田園都市線","#20A288","Tokyu","Shibuya:渋谷|Ikejiri-ōhashi:池尻大橋|Sangen-jaya:三軒茶屋|Komazawa-daigaku:駒沢大学|Sakura-shimmachi:桜新町|Yoga:用賀|Futako-tamagawa:二子玉川|Tsukushino:つくし野|Suzukakedai:すずかけ台|Minami Machida Grandberry Park:南町田グランベリーパーク"],
+ ["TY","Toyoko","東横線","#DA0442","Tokyu","Shibuya:渋谷|Daikan-yama:代官山|Naka-meguro:中目黒|Yutenji:祐天寺|Gakugei-daigaku:学芸大学|Toritsu-daigaku:都立大学|Jiyugaoka:自由が丘|Den-en-chofu:田園調布|Tamagawa:多摩川"],
+ ["MG","Meguro","目黒線","#009CD2","Tokyu","Meguro:目黒|Fudo-mae:不動前|Musashi-koyama:武蔵小山|Nishi-koyama:西小山|Senzoku:洗足|Ookayama:大岡山|Okusawa:奥沢|Den-en-chofu:田園調布|Tamagawa:多摩川"],
+ ["OM","Oimachi","大井町線","#F18C43","Tokyu","Oimachi:大井町|Shimo-shimmei:下神明|Togoshi-koen:戸越公園|Nakanobu:中延|Ebara-machi:荏原町|Hatanodai:旗の台|Kita-senzoku:北千束|Ookayama:大岡山|Midorigaoka:緑が丘|Jiyugaoka:自由が丘|Kuhombutsu:九品仏|Oyamadai:尾山台|Todoroki:等々力|Kaminoge:上野毛|Futako-tamagawa:二子玉川"],
+ ["IK","Ikegami","池上線","#EE86A7","Tokyu","Gotanda:五反田|Ōsaki-hirokōji:大崎広小路|Togoshi-ginza:戸越銀座|Ebara-nakanobu:荏原中延|Hatanodai:旗の台|Nagahara:長原|Senzoku-ike:洗足池|Ishikawa-dai:石川台|Yukigaya-ōtsuka:雪が谷大塚|Ontakesan:御嶽山|Kugahara:久が原|Chidoricho:千鳥町|Ikegami:池上|Hasunuma:蓮沼|Kamata:蒲田"],
+ ["TM","Tokyu-Tamagawa","東急多摩川線","#AE0378","Tokyu","Tamagawa:多摩川|Numabe:沼部|Unoki:鵜の木|Shimomaruko:下丸子|Musashi-nitta:武蔵新田|Yaguchi-no-watashi:矢口渡|Kamata:蒲田"],
+ ["SG","Setagaya","世田谷線","#FCC70D","Tokyu","Sangen-jaya:三軒茶屋|Nishi-taishido:西太子堂|Wakabayashi:若林|Shoin-jinja-mae:松陰神社前|Setagaya:世田谷|Kamimachi:上町|Miyanosaka:宮の坂|Yamashita:山下|Matsubara:松原|Shimo-takaido:下高井戸"],
+ ["TX","Tsukuba Express","つくばエクスプレス","#000084","MIR","Akihabara:秋葉原|Shin-Okachimachi:新御徒町|Asakusa:浅草|Minami-Senju:南千住|Kita-Senju:北千住|Aoi:青井|Rokuchō:六町"],
+ ["U","Yurikamome","ゆりかもめ","#27404E","Yurikamome","Shimbashi:新橋|Shiodome:汐留|Takeshiba:竹芝|Hinode:日の出|Shibaura-futō:芝浦ふ頭|Odaiba-kaihinkōen:お台場海浜公園|Daiba:台場|Tokyo International Cruise Terminal:東京国際クルーズターミナル|Telecom Center:テレコムセンター|Aomi:青海|Tokyo Big Sight:東京ビッグサイト|Ariake:有明|Ariake-tennis-no-mori:有明テニスの森|Shijō-mae:市場前|Shin-Toyosu:新豊洲|Toyosu:豊洲"],
+ ["MO","Haneda Airport","羽田空港線","#003686","Tokyo Monorail","Monorail Hamamatsucho:モノレール浜松町|Tennozu Isle:天王洲アイル|Oi-Keibajo-Mae:大井競馬場前|Ryutsu Center:流通センター|Showajima:昭和島|Seibijo:整備場|Tenkubashi:天空橋|Haneda Airport Terminal 3:羽田空港第3ターミナル|Shin-Seibijo:新整備場|Haneda Airport Terminal 1:羽田空港第1ターミナル|Haneda Airport Terminal 2:羽田空港第2ターミナル"],
+ ["TT","Tama Monorail","多摩モノレール","#FF6633","Tama Monorail","Tama Center:多摩センター|Matsugaya:松が谷|Otsuka-Teikyo-Daigaku:大塚・帝京大学|Chuo-Daigaku-Meisei-Daigaku:中央大学・明星大学|Tama-Dobutsukoen:多摩動物公園|Hodokubo:程久保|Takahatafudo:高幡不動|Manganji:万願寺|Koshukaido:甲州街道|Shibasaki-Taiikukan:柴崎体育館|Tachikawa-Minami:立川南|Tachikawa-Kita:立川北|Takamatsu:高松|Tachihi:立飛|Izumi-Taiikukan:泉体育館|Sunagawa-Nanaban:砂川七番|Tamagawa-Josui:玉川上水|Sakurakaido:桜街道|Kamikitadai:上北台"]];
+/* ---- Data ---- */
+const OUT_OF_TOKYO=new Set(["Wakōshi","Urayasu","Minami-gyōtoku","Gyōtoku","Myōden","Baraki-nakayama","Nishi-funabashi","Motoyawata"]);
+const METRO=METRO_RAW.map(([l,n,j,c,s,br],i)=>{
   const stops=s.split("|").map((x,i)=>{const [r,k]=x.split(":");return{code:l+String(i+1).padStart(2,"0"),r,k,branch:false}});
   if(br)br.split("|").forEach(x=>{const [cr,k]=x.split(":");const [code,...rr]=cr.split(" ");stops.push({code,r:rr.join(" "),k,branch:true})});
-  return{l,n,j,c,stops};
+  return{l,n,j,c,op:i<9?"Tokyo Metro":"Toei",stops};
 });
-const K=LINES.length;
+const RAIL=[
+  ...METRO.map(L=>({...L,stops:L.stops.filter(s=>!OUT_OF_TOKYO.has(s.r))})),
+  ...RAIL_EXTRA.map(([l,n,j,c,op,s])=>({l,n,j,c,op,stops:s.split("|").map(x=>{const [r,k]=x.split(":");return{code:l,r,k,branch:false}})}))
+];
+const MODES={
+  metro:{lines:METRO,label:"Metro",kanji:"地下鉄"},
+  rail:{lines:RAIL,label:"All rail",kanji:"鉄道"}
+};
+const count=ls=>ls.reduce((a,L)=>a+L.stops.length,0);
 
-/* Aléa : crypto.getRandomValues + rejet → entier uniforme exact dans [0,n) */
+/* Randomness: crypto.getRandomValues + rejection sampling → exact uniform integer in [0,n) */
 const buf=new Uint32Array(2048);let bi=buf.length;
 function u32(){if(bi>=buf.length){try{crypto.getRandomValues(buf)}catch(e){for(let i=0;i<buf.length;i++)buf[i]=Math.random()*4294967296>>>0}bi=0}return buf[bi++]}
 function randInt(n){const lim=4294967296-(4294967296%n);let v;do{v=u32()}while(v>=lim);return v%n}
 
+let mode="metro",LINES=METRO,K=LINES.length;
 const pick=()=>{const li=randInt(K);return[li,randInt(LINES[li].stops.length)]};
 
 const $=id=>document.getElementById(id);
 const stage=$("stage"),core=$("core");
 const reduce=matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-/* Roue */
-const rds=LINES.map((L,i)=>{const a=-Math.PI/2+i*2*Math.PI/K;const d=document.createElement("div");
-  d.className="rd";d.style.setProperty("--c",L.c);d.style.left=(50+42*Math.cos(a))+"%";d.style.top=(50+42*Math.sin(a))+"%";d.textContent=L.l;d.title=L.n;stage.appendChild(d);return d});
-let cur=-1;
-function lightLine(i){rds.forEach((d,k)=>d.classList.toggle("on",k===i));cur=i}
+/* Ring */
+let rds=[],cur=-1;
+function buildRing(){
+  rds.forEach(d=>d.remove());cur=-1;
+  const dots=K>20;
+  rds=LINES.map((L,i)=>{const a=-Math.PI/2+i*2*Math.PI/K;const d=document.createElement("div");
+    d.className="rd"+(dots?" dot":"");d.style.setProperty("--c",L.c);d.style.left=(50+42*Math.cos(a))+"%";d.style.top=(50+42*Math.sin(a))+"%";d.textContent=L.l;d.title=`${L.op} ${L.n}`;stage.appendChild(d);return d});
+}
+function lightLine(i){if(cur>=0&&rds[cur])rds[cur].classList.remove("on");if(rds[i])rds[i].classList.add("on");cur=i}
 
-/* Tracé de ligne */
+/* Route strip */
 function stripPos(L){const main=L.stops.filter(s=>!s.branch).length,br=L.stops.length-main;const slots=main-1+(br?br+1.2:0);
   return L.stops.map((s,i)=>20+960*(s.branch?(main-1+1.2+(i-main)):i)/Math.max(1,slots))}
 function drawStrip(li,active,chosen){
   const svg=$("strip");
   if(li<0){svg.innerHTML=`<line x1="20" y1="20" x2="980" y2="20" stroke="var(--rule)" stroke-width="6" stroke-linecap="round" stroke-dasharray="2 14"/>`;return}
-  const L=LINES[li],xs=stripPos(L),main=L.stops.filter(s=>!s.branch).length;
+  const L=LINES[li],xs=stripPos(L),main=L.stops.filter(s=>!s.branch).length,r=L.stops.length>30?.8:1;
   let s=`<line x1="${xs[0]}" y1="20" x2="${xs[main-1]}" y2="20" stroke="${L.c}" stroke-width="8" stroke-linecap="round"/>`;
   if(main<L.stops.length)s+=`<line x1="${xs[main]}" y1="20" x2="${xs[xs.length-1]}" y2="20" stroke="${L.c}" stroke-width="8" stroke-linecap="round" opacity=".55"/>`;
   xs.forEach((x,i)=>{const big=i===chosen,on=i===active;
-    s+=`<circle cx="${x}" cy="20" r="${big?13:on?10:5.5}" fill="${big||on?L.c:"var(--roundel)"}" stroke="${big?"var(--ink)":L.c}" stroke-width="${big?4:3}"/>`});
+    s+=`<circle cx="${x}" cy="20" r="${big?13:on?10:5.5*r}" fill="${big||on?L.c:"var(--roundel)"}" stroke="${big?"var(--ink)":L.c}" stroke-width="${big?4:3*r}"/>`});
   svg.innerHTML=s;
 }
 function headFor(li){const L=LINES[li];
   $("rName").innerHTML=`<b>${L.n}</b> ${L.j} · ${L.stops.length} stops`;
   const main=L.stops.filter(s=>!s.branch);$("e1").textContent=main[0].r;$("e2").textContent=main[main.length-1].r+(main.length<L.stops.length?" · "+L.stops[L.stops.length-1].r:"")}
 
-/* Centre */
+/* Core */
 function fit(text){const w=core.clientWidth*0.78;const base=stage.clientWidth*0.14;return Math.min(base,w/Math.max(2,[...text].length))}
+function setCode(code){const m=code.match(/^(.*?)(\d+)$/);$("cL").textContent=m?m[1]:code;$("cN").textContent=m?m[2]:"";$("code").classList.toggle("solo",!m)}
 function showStop(li,si,final){
   const L=LINES[li],S=L.stops[si];
   core.style.setProperty("--lc",L.c);$("code").style.setProperty("--lc",L.c);
-  $("cL").textContent=S.code.replace(/\d+$/,"");$("cN").textContent=S.code.match(/\d+$/)[0];
+  setCode(S.code);
   const k=$("kanji");k.textContent=S.k;k.style.fontSize=fit(S.k)+"px";
-  $("romaji").textContent=S.r;$("lname").textContent=final?`${L.n} · ${L.j}`:"…";
+  $("romaji").textContent=S.r;$("lname").textContent=final?`${L.op} · ${L.n}`:"…";
   core.classList.toggle("scan",!final);
 }
-function idle(){const k=$("kanji");k.style.fontSize=fit("抽選")+"px"}
+function idle(){
+  core.style.removeProperty("--lc");$("code").style.removeProperty("--lc");setCode("·");core.classList.remove("scan","pop");
+  const k=$("kanji");k.textContent="抽選";k.style.fontSize=fit("抽選")+"px";
+  $("romaji").textContent=`${K} lines · ${count(LINES)} stops`;$("lname").textContent="Tap to draw";
+  $("rName").innerHTML="<b>—</b>";$("e1").textContent="";$("e2").textContent="";drawStrip(-1);
+  stage.classList.remove("locked");rds.forEach(d=>d.classList.remove("on"));
+}
 
-/* Séquence : durée totale fixe, décélération cubique */
+/* Sequence: fixed total duration, cubic deceleration */
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 async function run(steps,total,fn){const w=[];for(let i=0;i<steps;i++){const t=i/Math.max(1,steps-1);w.push(1+7*t*t*t)}const s=w.reduce((a,b)=>a+b,0);
   for(let i=0;i<steps;i++){fn(i);await sleep(total*w[i]/s)}}
 
 let busy=false;const hist=[];
+function renderHist(){
+  $("hist").innerHTML=hist.length?hist.map(h=>`<div class="h"><i style="--c:${h.c}">${h.code}</i><div><strong>${h.k}</strong><small>${h.r}</small></div></div>`).join(""):`<span class="empty">Your draws appear here</span>`;
+}
 async function draw(){
-  if(busy)return;busy=true;$("go").disabled=true;
+  if(busy)return;busy=true;$("go").disabled=true;$("seg").classList.add("busy");
   const [li,si]=pick();const L=LINES[li];
   core.classList.remove("pop");stage.classList.remove("locked");
   if(!reduce){
     stage.classList.add("spin");
-    const start=cur<0?0:cur, steps=2*K+((li-start+K)%K);
+    const start=cur<0?0:cur, steps=(K>20?1:2)*K+((li-start+K)%K);
     await run(steps,1500,i=>lightLine((start+i+1)%K));
     stage.classList.add("locked");headFor(li);
     const n=L.stops.length, steps2=n+si+1;
@@ -209,20 +307,28 @@ async function draw(){
     stage.classList.remove("spin");
   }else{lightLine(li);stage.classList.add("locked");headFor(li)}
   drawStrip(li,-1,si);showStop(li,si,true);void core.offsetWidth;core.classList.add("pop");
-  core.setAttribute("aria-label",`${L.stops[si].r}, ${L.n} line. Draw again`);
-  hist.unshift([li,si]);if(hist.length>12)hist.pop();
-  $("hist").innerHTML=hist.map(([a,b])=>{const X=LINES[a],S=X.stops[b];return`<div class="h"><i style="--c:${X.c}">${S.code}</i><div><strong>${S.k}</strong><small>${S.r}</small></div></div>`}).join("");
-  busy=false;$("go").disabled=false;
+  const S=L.stops[si];
+  core.setAttribute("aria-label",`${S.r}, ${L.op} ${L.n} line. Draw again`);
+  hist.unshift({c:L.c,code:S.code,k:S.k,r:S.r});if(hist.length>12)hist.pop();renderHist();
+  busy=false;$("go").disabled=false;$("seg").classList.remove("busy");
 }
 $("go").onclick=draw;core.onclick=draw;
 core.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();draw()}};
 document.addEventListener("keydown",e=>{if(e.code==="Space"&&(e.target===document.body)){e.preventDefault();draw()}});
 
-
-
-drawStrip(-1);idle();
-addEventListener("resize",()=>{if(hist.length){const [li,si]=hist[0];showStop(li,si,true)}else idle()});
-document.fonts&&document.fonts.ready.then(()=>{if(!hist.length)idle()});
+/* Modes */
+function setMode(m){
+  if(busy||!MODES[m])return;mode=m;LINES=MODES[m].lines;K=LINES.length;
+  document.querySelectorAll("#seg button").forEach(b=>b.setAttribute("aria-pressed",b.dataset.m===m));
+  $("bk").textContent=MODES[m].kanji;
+  try{localStorage.setItem("tr-mode",m)}catch(e){}
+  buildRing();idle();
+}
+document.querySelectorAll("#seg button").forEach(b=>b.onclick=()=>setMode(b.dataset.m));
+let saved="metro";try{saved=localStorage.getItem("tr-mode")||"metro"}catch(e){}
+setMode(MODES[saved]?saved:"metro");renderHist();
+addEventListener("resize",()=>{if(cur>=0&&stage.classList.contains("locked")&&hist.length){const k=$("kanji");k.style.fontSize=fit(k.textContent)+"px"}else idle()});
+document.fonts&&document.fonts.ready.then(()=>{const k=$("kanji");k.style.fontSize=fit(k.textContent)+"px"});
 </script>
 
 </body>
