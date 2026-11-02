@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Spin a ring of Tokyo's 13 subway lines, then run along the line to a random stop.">
+<title>Tokyo Roulette</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jost:wght@400;500;600;700&family=Shippori+Mincho+B1:wght@700;800&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+/* Layout: one centred screen, no scroll: ring of 13 lines, result in the core, route strip below */
+:root{
+  --bg:#0e1116; --panel:#161a21; --ink:#eef0f3; --dim:#8a93a3; --rule:#262c36; --roundel:#ffffff; --roundel-ink:#14171c;
+  --f-ui:"Jost","Futura","Century Gothic",system-ui,sans-serif;
+  --f-kanji:"Shippori Mincho B1","Hiragino Mincho ProN","Yu Mincho",serif;
+  --f-mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+  color-scheme:dark;
+}
+@media (prefers-color-scheme: light){:root:not([data-theme="dark"]){--bg:#e8eaed;--panel:#f6f7f8;--ink:#14171c;--dim:#5d6573;--rule:#d0d4da;--roundel:#ffffff;--roundel-ink:#14171c;color-scheme:light}}
+:root[data-theme="light"]{--bg:#e8eaed;--panel:#f6f7f8;--ink:#14171c;--dim:#5d6573;--rule:#d0d4da;--roundel:#ffffff;--roundel-ink:#14171c;color-scheme:light}
+*{box-sizing:border-box}
+html,body{height:100%;overflow:hidden}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-ui);font-size:15px;
+  background-image:linear-gradient(var(--rule) 1px,transparent 1px),linear-gradient(90deg,var(--rule) 1px,transparent 1px);
+  background-size:28px 28px;background-position:-1px -1px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:clamp(10px,2svh,16px)}
+body::after{content:"";position:fixed;inset:0;pointer-events:none;background:radial-gradient(ellipse at 50% 38%,transparent 0,var(--bg) 72%);z-index:0}
+.app{position:relative;z-index:1;max-width:560px;height:100%;margin:0 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:clamp(8px,2.2svh,18px)}
+
+/* Barre */
+.bar{width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.brand{display:flex;align-items:baseline;gap:10px}
+.brand b{font-weight:700;font-size:1.05rem;letter-spacing:.14em;text-transform:uppercase}
+.brand span{font-family:var(--f-kanji);font-weight:800;color:var(--dim);font-size:.95rem}
+
+/* Roue */
+.stage{position:relative;flex:none;width:min(88vw,460px,calc(100svh - 330px));min-width:220px;max-width:100%;aspect-ratio:1}
+.track{position:absolute;inset:0;width:100%;height:100%}
+.track circle{fill:none}
+.spin .track .dash{animation:rot 6s linear infinite}
+@keyframes rot{to{transform:rotate(360deg)}}
+.track .dash{transform-origin:50% 50%}
+.rd{position:absolute;width:12.5%;aspect-ratio:1;transform:translate(-50%,-50%);border-radius:50%;
+  background:var(--roundel);color:var(--roundel-ink);border:solid var(--c);border-width:clamp(4px,1.3vw,6px);
+  display:flex;align-items:center;justify-content:center;font-weight:700;font-size:clamp(14px,4.2vw,20px);
+  transition:transform .12s ease-out,background .12s,color .12s,opacity .25s,box-shadow .2s;user-select:none}
+.rd.on{transform:translate(-50%,-50%) scale(1.28);background:var(--c);color:#fff;box-shadow:0 0 0 6px color-mix(in srgb,var(--c) 22%,transparent),0 0 36px color-mix(in srgb,var(--c) 70%,transparent)}
+.stage.locked .rd:not(.on){opacity:.28}
+.core{position:absolute;left:50%;top:50%;width:58%;height:58%;overflow:hidden;transform:translate(-50%,-50%);border-radius:50%;
+  background:var(--panel);border:1px solid var(--rule);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;text-align:center;padding:8%;cursor:pointer;
+  box-shadow:0 30px 60px -30px rgba(0,0,0,.6), inset 0 0 0 6px color-mix(in srgb,var(--lc,var(--rule)) 18%,transparent);transition:box-shadow .4s}
+.core:focus-visible{outline:3px solid var(--ink);outline-offset:4px}
+.code{width:clamp(38px,11%,52px);aspect-ratio:1;border-radius:50%;border:4px solid var(--lc,var(--rule));background:var(--roundel);color:var(--roundel-ink);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:.95;font-weight:700;min-width:38px}
+.code .l{font-size:.78rem}.code .n{font-size:.9rem}
+.kanji{font-family:var(--f-kanji);font-weight:800;line-height:1.05;white-space:nowrap;transition:opacity .15s}
+.romaji{font-weight:500;font-size:clamp(13px,3.4vw,16px);letter-spacing:.04em;max-width:100%;overflow-wrap:anywhere}
+.lname{max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:clamp(.62rem,2.6vw,.74rem);letter-spacing:.12em;text-transform:uppercase;color:var(--dim)}
+.scan .kanji,.scan .romaji{opacity:.5}
+.pop .kanji{animation:pop .45s cubic-bezier(.2,1.6,.4,1)}
+@keyframes pop{from{transform:scale(.86)}to{transform:scale(1)}}
+
+/* Tracé */
+.route{width:100%;display:flex;flex-direction:column;gap:6px}
+.route-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px;font-size:.84rem;color:var(--dim);flex-wrap:wrap}
+.route-head b{color:var(--ink);font-weight:600}
+.route svg{display:block;width:100%;height:auto;overflow:visible}
+.ends{display:flex;justify-content:space-between;font-size:.74rem;color:var(--dim);gap:10px}
+
+/* Action */
+.go{flex:none;font:inherit;font-weight:600;font-size:1.05rem;letter-spacing:.18em;text-transform:uppercase;cursor:pointer;
+  border:0;border-radius:999px;padding:clamp(11px,1.8svh,15px) 44px;background:var(--ink);color:var(--bg);display:flex;align-items:center;gap:12px;transition:transform .1s,opacity .2s}
+.go:active{transform:scale(.97)}
+.go[disabled]{opacity:.45;cursor:default}
+.go:focus-visible{outline:3px solid var(--dim);outline-offset:3px}
+.go kbd{font-family:var(--f-mono);font-size:.68rem;letter-spacing:0;border:1px solid currentColor;border-radius:5px;padding:1px 6px;opacity:.55}
+@media (hover:none){.go kbd{display:none}}
+
+/* Historique */
+.hist{flex:none;width:100%;display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none;min-height:46px}
+.hist::-webkit-scrollbar{display:none}
+.h{flex:none;display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--rule);border-radius:12px;padding:6px 12px 6px 6px}
+.h i{width:26px;height:26px;border-radius:50%;border:3px solid var(--c);background:var(--roundel);color:var(--roundel-ink);font-style:normal;font-weight:700;font-size:.62rem;display:flex;align-items:center;justify-content:center;line-height:1}
+.h div{display:flex;flex-direction:column;line-height:1.15}
+.h strong{font-family:var(--f-kanji);font-weight:800;font-size:.95rem}
+.h small{font-size:.7rem;color:var(--dim)}
+.hist .empty{color:var(--dim);font-size:.8rem;align-self:center;margin:0 auto}
+
+
+@media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<main class="app">
+  <div class="bar">
+    <div class="brand"><b>Tokyo Roulette</b><span>地下鉄</span></div>
+  </div>
+
+  <div class="stage" id="stage">
+    <svg class="track" viewBox="0 0 100 100" aria-hidden="true">
+      <circle cx="50" cy="50" r="42" stroke="var(--rule)" stroke-width=".35"/>
+      <circle class="dash" cx="50" cy="50" r="48.5" stroke="var(--rule)" stroke-width=".5" stroke-dasharray=".6 2.4"/>
+    </svg>
+    <div class="core" id="core" role="button" tabindex="0" aria-live="polite" aria-label="Draw">
+      <div class="code" id="code"><span class="l" id="cL">·</span><span class="n" id="cN"></span></div>
+      <div class="kanji" id="kanji">抽選</div>
+      <div class="romaji" id="romaji">13 lines · 291 stops</div>
+      <div class="lname" id="lname">Tap to draw</div>
+    </div>
+  </div>
+
+  <div class="route">
+    <div class="route-head"><span id="rName"><b>—</b></span></div>
+    <svg id="strip" viewBox="0 0 1000 40" aria-hidden="true"></svg>
+    <div class="ends"><span id="e1"></span><span id="e2"></span></div>
+  </div>
+
+  <button class="go" id="go">Draw <kbd>space</kbd></button>
+
+  <div class="hist" id="hist"><span class="empty">Your draws appear here</span></div>
+
+</main>
+
+<script>
+const LINES=[
+ ["G","Ginza","銀座線","#FF9500","Shibuya:渋谷|Omotesandō:表参道|Gaiemmae:外苑前|Aoyama-itchōme:青山一丁目|Akasaka-mitsuke:赤坂見附|Tameike-sannō:溜池山王|Toranomon:虎ノ門|Shimbashi:新橋|Ginza:銀座|Kyōbashi:京橋|Nihombashi:日本橋|Mitsukoshimae:三越前|Kanda:神田|Suehirochō:末広町|Ueno-hirokōji:上野広小路|Ueno:上野|Inarichō:稲荷町|Tawaramachi:田原町|Asakusa:浅草"],
+ ["M","Marunouchi","丸ノ内線","#F62E36","Ogikubo:荻窪|Minami-asagaya:南阿佐ケ谷|Shin-kōenji:新高円寺|Higashi-kōenji:東高円寺|Shin-nakano:新中野|Nakano-sakaue:中野坂上|Nishi-shinjuku:西新宿|Shinjuku:新宿|Shinjuku-sanchōme:新宿三丁目|Shinjuku-gyoemmae:新宿御苑前|Yotsuya-sanchōme:四谷三丁目|Yotsuya:四ツ谷|Akasaka-mitsuke:赤坂見附|Kokkai-gijidōmae:国会議事堂前|Kasumigaseki:霞ケ関|Ginza:銀座|Tōkyō:東京|Ōtemachi:大手町|Awajichō:淡路町|Ochanomizu:御茶ノ水|Hongō-sanchōme:本郷三丁目|Kōrakuen:後楽園|Myōgadani:茗荷谷|Shin-ōtsuka:新大塚|Ikebukuro:池袋","Mb03 Nakano-shimbashi:中野新橋|Mb04 Nakano-fujimichō:中野富士見町|Mb05 Hōnanchō:方南町"],
+ ["H","Hibiya","日比谷線","#B5B5AC","Naka-meguro:中目黒|Ebisu:恵比寿|Hiroo:広尾|Roppongi:六本木|Kamiyachō:神谷町|Toranomon Hills:虎ノ門ヒルズ|Kasumigaseki:霞ケ関|Hibiya:日比谷|Ginza:銀座|Higashi-ginza:東銀座|Tsukiji:築地|Hatchōbori:八丁堀|Kayabachō:茅場町|Ningyōchō:人形町|Kodemmachō:小伝馬町|Akihabara:秋葉原|Naka-okachimachi:仲御徒町|Ueno:上野|Iriya:入谷|Minowa:三ノ輪|Minami-senju:南千住|Kita-senju:北千住"],
+ ["T","Tōzai","東西線","#009BBF","Nakano:中野|Ochiai:落合|Takadanobaba:高田馬場|Waseda:早稲田|Kagurazaka:神楽坂|Iidabashi:飯田橋|Kudanshita:九段下|Takebashi:竹橋|Ōtemachi:大手町|Nihombashi:日本橋|Kayabachō:茅場町|Monzen-nakachō:門前仲町|Kiba:木場|Tōyōchō:東陽町|Minami-sunamachi:南砂町|Nishi-kasai:西葛西|Kasai:葛西|Urayasu:浦安|Minami-gyōtoku:南行徳|Gyōtoku:行徳|Myōden:妙典|Baraki-nakayama:原木中山|Nishi-funabashi:西船橋"],
+ ["C","Chiyoda","千代田線","#00BB85","Yoyogi-uehara:代々木上原|Yoyogi-kōen:代々木公園|Meiji-jingūmae:明治神宮前|Omotesandō:表参道|Nogizaka:乃木坂|Akasaka:赤坂|Kokkai-gijidōmae:国会議事堂前|Kasumigaseki:霞ケ関|Hibiya:日比谷|Nijūbashimae:二重橋前|Ōtemachi:大手町|Shin-ochanomizu:新御茶ノ水|Yushima:湯島|Nezu:根津|Sendagi:千駄木|Nishi-nippori:西日暮里|Machiya:町屋|Kita-senju:北千住|Ayase:綾瀬|Kita-ayase:北綾瀬"],
+ ["Y","Yūrakuchō","有楽町線","#C1A470","Wakōshi:和光市|Chikatetsu-narimasu:地下鉄成増|Chikatetsu-akatsuka:地下鉄赤塚|Heiwadai:平和台|Hikawadai:氷川台|Kotake-mukaihara:小竹向原|Senkawa:千川|Kanamechō:要町|Ikebukuro:池袋|Higashi-ikebukuro:東池袋|Gokokuji:護国寺|Edogawabashi:江戸川橋|Iidabashi:飯田橋|Ichigaya:市ケ谷|Kōjimachi:麹町|Nagatachō:永田町|Sakuradamon:桜田門|Yūrakuchō:有楽町|Ginza-itchōme:銀座一丁目|Shintomichō:新富町|Tsukishima:月島|Toyosu:豊洲|Tatsumi:辰巳|Shin-kiba:新木場"],
+ ["Z","Hanzōmon","半蔵門線","#8F76D6","Shibuya:渋谷|Omotesandō:表参道|Aoyama-itchōme:青山一丁目|Nagatachō:永田町|Hanzōmon:半蔵門|Kudanshita:九段下|Jimbōchō:神保町|Ōtemachi:大手町|Mitsukoshimae:三越前|Suitengūmae:水天宮前|Kiyosumi-shirakawa:清澄白河|Sumiyoshi:住吉|Kinshichō:錦糸町|Oshiage:押上"],
+ ["N","Namboku","南北線","#00AC9B","Meguro:目黒|Shirokanedai:白金台|Shirokane-takanawa:白金高輪|Azabu-jūban:麻布十番|Roppongi-itchōme:六本木一丁目|Tameike-sannō:溜池山王|Nagatachō:永田町|Yotsuya:四ツ谷|Ichigaya:市ケ谷|Iidabashi:飯田橋|Kōrakuen:後楽園|Tōdaimae:東大前|Hon-komagome:本駒込|Komagome:駒込|Nishigahara:西ケ原|Ōji:王子|Ōji-kamiya:王子神谷|Shimo:志茂|Akabane-iwabuchi:赤羽岩淵"],
+ ["F","Fukutoshin","副都心線","#9C5E31","Wakōshi:和光市|Chikatetsu-narimasu:地下鉄成増|Chikatetsu-akatsuka:地下鉄赤塚|Heiwadai:平和台|Hikawadai:氷川台|Kotake-mukaihara:小竹向原|Senkawa:千川|Kanamechō:要町|Ikebukuro:池袋|Zōshigaya:雑司が谷|Nishi-waseda:西早稲田|Higashi-shinjuku:東新宿|Shinjuku-sanchōme:新宿三丁目|Kita-sandō:北参道|Meiji-jingūmae:明治神宮前|Shibuya:渋谷"],
+ ["A","Asakusa","浅草線","#E85298","Nishi-magome:西馬込|Magome:馬込|Nakanobu:中延|Togoshi:戸越|Gotanda:五反田|Takanawadai:高輪台|Sengakuji:泉岳寺|Mita:三田|Daimon:大門|Shimbashi:新橋|Higashi-ginza:東銀座|Takarachō:宝町|Nihombashi:日本橋|Ningyōchō:人形町|Higashi-nihombashi:東日本橋|Asakusabashi:浅草橋|Kuramae:蔵前|Asakusa:浅草|Honjo-azumabashi:本所吾妻橋|Oshiage:押上"],
+ ["I","Mita","三田線","#0079C2","Meguro:目黒|Shirokanedai:白金台|Shirokane-takanawa:白金高輪|Mita:三田|Shibakōen:芝公園|Onarimon:御成門|Uchisaiwaichō:内幸町|Hibiya:日比谷|Ōtemachi:大手町|Jimbōchō:神保町|Suidōbashi:水道橋|Kasuga:春日|Hakusan:白山|Sengoku:千石|Sugamo:巣鴨|Nishi-sugamo:西巣鴨|Shin-itabashi:新板橋|Itabashi-kuyakushomae:板橋区役所前|Itabashi-honchō:板橋本町|Motohasunuma:本蓮沼|Shimura-sakaue:志村坂上|Shimura-sanchōme:志村三丁目|Hasune:蓮根|Nishidai:西台|Takashimadaira:高島平|Shin-takashimadaira:新高島平|Nishi-takashimadaira:西高島平"],
+ ["S","Shinjuku","新宿線","#6CBB5A","Shinjuku:新宿|Shinjuku-sanchōme:新宿三丁目|Akebonobashi:曙橋|Ichigaya:市ケ谷|Kudanshita:九段下|Jimbōchō:神保町|Ogawamachi:小川町|Iwamotochō:岩本町|Bakuro-yokoyama:馬喰横山|Hamachō:浜町|Morishita:森下|Kikukawa:菊川|Sumiyoshi:住吉|Nishi-ōjima:西大島|Ōjima:大島|Higashi-ōjima:東大島|Funabori:船堀|Ichinoe:一之江|Mizue:瑞江|Shinozaki:篠崎|Motoyawata:本八幡"],
+ ["E","Ōedo","大江戸線","#B6007A","Shinjuku-nishiguchi:新宿西口|Higashi-shinjuku:東新宿|Wakamatsu-kawada:若松河田|Ushigome-yanagichō:牛込柳町|Ushigome-kagurazaka:牛込神楽坂|Iidabashi:飯田橋|Kasuga:春日|Hongō-sanchōme:本郷三丁目|Ueno-okachimachi:上野御徒町|Shin-okachimachi:新御徒町|Kuramae:蔵前|Ryōgoku:両国|Morishita:森下|Kiyosumi-shirakawa:清澄白河|Monzen-nakachō:門前仲町|Tsukishima:月島|Kachidoki:勝どき|Tsukijishijō:築地市場|Shiodome:汐留|Daimon:大門|Akabanebashi:赤羽橋|Azabu-jūban:麻布十番|Roppongi:六本木|Aoyama-itchōme:青山一丁目|Kokuritsu-kyōgijō:国立競技場|Yoyogi:代々木|Shinjuku:新宿|Tochōmae:都庁前|Nishi-shinjuku-gochōme:西新宿五丁目|Nakano-sakaue:中野坂上|Higashi-nakano:東中野|Nakai:中井|Ochiai-minami-nagasaki:落合南長崎|Shin-egota:新江古田|Nerima:練馬|Toshimaen:豊島園|Nerima-kasugachō:練馬春日町|Hikarigaoka:光が丘"]
+].map(([l,n,j,c,s,br])=>{
+  const stops=s.split("|").map((x,i)=>{const [r,k]=x.split(":");return{code:l+String(i+1).padStart(2,"0"),r,k,branch:false}});
+  if(br)br.split("|").forEach(x=>{const [cr,k]=x.split(":");const [code,...rr]=cr.split(" ");stops.push({code,r:rr.join(" "),k,branch:true})});
+  return{l,n,j,c,stops};
+});
+const K=LINES.length;
+
+/* Aléa : crypto.getRandomValues + rejet → entier uniforme exact dans [0,n) */
+const buf=new Uint32Array(2048);let bi=buf.length;
+function u32(){if(bi>=buf.length){try{crypto.getRandomValues(buf)}catch(e){for(let i=0;i<buf.length;i++)buf[i]=Math.random()*4294967296>>>0}bi=0}return buf[bi++]}
+function randInt(n){const lim=4294967296-(4294967296%n);let v;do{v=u32()}while(v>=lim);return v%n}
+
+const pick=()=>{const li=randInt(K);return[li,randInt(LINES[li].stops.length)]};
+
+const $=id=>document.getElementById(id);
+const stage=$("stage"),core=$("core");
+const reduce=matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/* Roue */
+const rds=LINES.map((L,i)=>{const a=-Math.PI/2+i*2*Math.PI/K;const d=document.createElement("div");
+  d.className="rd";d.style.setProperty("--c",L.c);d.style.left=(50+42*Math.cos(a))+"%";d.style.top=(50+42*Math.sin(a))+"%";d.textContent=L.l;d.title=L.n;stage.appendChild(d);return d});
+let cur=-1;
+function lightLine(i){rds.forEach((d,k)=>d.classList.toggle("on",k===i));cur=i}
+
+/* Tracé de ligne */
+function stripPos(L){const main=L.stops.filter(s=>!s.branch).length,br=L.stops.length-main;const slots=main-1+(br?br+1.2:0);
+  return L.stops.map((s,i)=>20+960*(s.branch?(main-1+1.2+(i-main)):i)/Math.max(1,slots))}
+function drawStrip(li,active,chosen){
+  const svg=$("strip");
+  if(li<0){svg.innerHTML=`<line x1="20" y1="20" x2="980" y2="20" stroke="var(--rule)" stroke-width="6" stroke-linecap="round" stroke-dasharray="2 14"/>`;return}
+  const L=LINES[li],xs=stripPos(L),main=L.stops.filter(s=>!s.branch).length;
+  let s=`<line x1="${xs[0]}" y1="20" x2="${xs[main-1]}" y2="20" stroke="${L.c}" stroke-width="8" stroke-linecap="round"/>`;
+  if(main<L.stops.length)s+=`<line x1="${xs[main]}" y1="20" x2="${xs[xs.length-1]}" y2="20" stroke="${L.c}" stroke-width="8" stroke-linecap="round" opacity=".55"/>`;
+  xs.forEach((x,i)=>{const big=i===chosen,on=i===active;
+    s+=`<circle cx="${x}" cy="20" r="${big?13:on?10:5.5}" fill="${big||on?L.c:"var(--roundel)"}" stroke="${big?"var(--ink)":L.c}" stroke-width="${big?4:3}"/>`});
+  svg.innerHTML=s;
+}
+function headFor(li){const L=LINES[li];
+  $("rName").innerHTML=`<b>${L.n}</b> ${L.j} · ${L.stops.length} stops`;
+  const main=L.stops.filter(s=>!s.branch);$("e1").textContent=main[0].r;$("e2").textContent=main[main.length-1].r+(main.length<L.stops.length?" · "+L.stops[L.stops.length-1].r:"")}
+
+/* Centre */
+function fit(text){const w=core.clientWidth*0.78;const base=stage.clientWidth*0.14;return Math.min(base,w/Math.max(2,[...text].length))}
+function showStop(li,si,final){
+  const L=LINES[li],S=L.stops[si];
+  core.style.setProperty("--lc",L.c);$("code").style.setProperty("--lc",L.c);
+  $("cL").textContent=S.code.replace(/\d+$/,"");$("cN").textContent=S.code.match(/\d+$/)[0];
+  const k=$("kanji");k.textContent=S.k;k.style.fontSize=fit(S.k)+"px";
+  $("romaji").textContent=S.r;$("lname").textContent=final?`${L.n} · ${L.j}`:"…";
+  core.classList.toggle("scan",!final);
+}
+function idle(){const k=$("kanji");k.style.fontSize=fit("抽選")+"px"}
+
+/* Séquence : durée totale fixe, décélération cubique */
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+async function run(steps,total,fn){const w=[];for(let i=0;i<steps;i++){const t=i/Math.max(1,steps-1);w.push(1+7*t*t*t)}const s=w.reduce((a,b)=>a+b,0);
+  for(let i=0;i<steps;i++){fn(i);await sleep(total*w[i]/s)}}
+
+let busy=false;const hist=[];
+async function draw(){
+  if(busy)return;busy=true;$("go").disabled=true;
+  const [li,si]=pick();const L=LINES[li];
+  core.classList.remove("pop");stage.classList.remove("locked");
+  if(!reduce){
+    stage.classList.add("spin");
+    const start=cur<0?0:cur, steps=2*K+((li-start+K)%K);
+    await run(steps,1500,i=>lightLine((start+i+1)%K));
+    stage.classList.add("locked");headFor(li);
+    const n=L.stops.length, steps2=n+si+1;
+    await run(steps2,1500,i=>{const k=i%n;drawStrip(li,k,-1);showStop(li,k,false)});
+    stage.classList.remove("spin");
+  }else{lightLine(li);stage.classList.add("locked");headFor(li)}
+  drawStrip(li,-1,si);showStop(li,si,true);void core.offsetWidth;core.classList.add("pop");
+  core.setAttribute("aria-label",`${L.stops[si].r}, ${L.n} line. Draw again`);
+  hist.unshift([li,si]);if(hist.length>12)hist.pop();
+  $("hist").innerHTML=hist.map(([a,b])=>{const X=LINES[a],S=X.stops[b];return`<div class="h"><i style="--c:${X.c}">${S.code}</i><div><strong>${S.k}</strong><small>${S.r}</small></div></div>`}).join("");
+  busy=false;$("go").disabled=false;
+}
+$("go").onclick=draw;core.onclick=draw;
+core.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();draw()}};
+document.addEventListener("keydown",e=>{if(e.code==="Space"&&(e.target===document.body)){e.preventDefault();draw()}});
+
+
+
+drawStrip(-1);idle();
+addEventListener("resize",()=>{if(hist.length){const [li,si]=hist[0];showStop(li,si,true)}else idle()});
+document.fonts&&document.fonts.ready.then(()=>{if(!hist.length)idle()});
+</script>
+
+</body>
+</html>
