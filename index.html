@@ -43,6 +43,7 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;background:rad
 .rd.sm.on{transform:translate(-50%,-50%) scale(1.75);z-index:2;box-shadow:0 0 0 3px color-mix(in srgb,var(--c) 25%,transparent),0 0 20px color-mix(in srgb,var(--c) 70%,transparent)}
 .stage.dense .core{width:48%;height:48%;padding:6%;gap:4px}
 .stage.dense .track{display:none}
+.stage.dense .lname{display:none}
 .code.solo .l{font-size:1rem}
 .stage{position:relative;flex:none;width:min(88vw,460px,calc(100svh - 340px));min-width:220px;max-width:100%;aspect-ratio:1}
 .track{position:absolute;inset:0;width:100%;height:100%}
@@ -268,7 +269,7 @@ function drawStrip(li,active,chosen){
   svg.innerHTML=s;
 }
 function headFor(li){const L=LINES[li];
-  $("rName").innerHTML=`<b>${L.n}</b> ${L.j} · ${L.stops.length} stops`;
+  $("rName").innerHTML=`<b>${L.n}</b> ${L.j} · ${L.op} · ${L.stops.length} stops`;
   const main=L.stops.filter(s=>!s.branch);$("e1").textContent=main[0].r;$("e2").textContent=main[main.length-1].r+(main.length<L.stops.length?" · "+L.stops[L.stops.length-1].r:"")}
 
 /* Core */
