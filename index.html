@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Spin a ring of Tokyo's 13 subway lines, then run along the line to a random stop.">
-<title>Tokyo Roulette</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jost:wght@400;500;600;700&family=Shippori+Mincho+B1:wght@700;800&family=JetBrains+Mono:wght@400;600&display=swap">
+<title>Draw a random metro station in Tokyo</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Shippori+Mincho+B1:wght@700;800&family=JetBrains+Mono:wght@400;600&display=swap">
 <style>
 :root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 /* Layout: one centred screen, no scroll: ring of 13 lines, result in the core, route strip below */
 :root{
   --bg:#0e1116; --panel:#161a21; --ink:#eef0f3; --dim:#8a93a3; --rule:#262c36; --roundel:#ffffff; --roundel-ink:#14171c;
-  --f-ui:"Jost","Futura","Century Gothic",system-ui,sans-serif;
+  --f-ui:"Outfit","Futura","Century Gothic",system-ui,sans-serif;
   --f-kanji:"Shippori Mincho B1","Hiragino Mincho ProN","Yu Mincho",serif;
   --f-mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
   color-scheme:dark;
@@ -29,8 +29,8 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;background:rad
 
 /* Barre */
 .bar{width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
-.brand{display:flex;align-items:baseline;gap:10px}
-.brand b{font-weight:700;font-size:1.05rem;letter-spacing:.14em;text-transform:uppercase}
+.brand{display:flex;align-items:baseline;gap:10px;min-width:0}
+.brand b{font-weight:600;font-size:clamp(.95rem,4.2vw,1.15rem);letter-spacing:.01em}
 .brand span{font-family:var(--f-kanji);font-weight:800;color:var(--dim);font-size:.95rem}
 
 /* Roue */
@@ -93,7 +93,7 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;background:rad
 <body>
 <main class="app">
   <div class="bar">
-    <div class="brand"><b>Tokyo Roulette</b><span>地下鉄</span></div>
+    <div class="brand"><b>Draw a random metro station in Tokyo</b><span>地下鉄</span></div>
   </div>
 
   <div class="stage" id="stage">

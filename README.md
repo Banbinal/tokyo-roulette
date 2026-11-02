@@ -1,4 +1,4 @@
-# Tokyo Roulette
+# Draw a random metro station in Tokyo
 
 Picks a random Tokyo subway stop: one of the 13 lines (Tokyo Metro + Toei), then one stop on that line.
 
